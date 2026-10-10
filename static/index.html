@@ -11,6 +11,13 @@
 <body>
   <header>
     <h1>🎲🎲 Snake Eyes</h1>
+    <div class="universe-picker">
+      <label for="universe">Contexte</label>
+      <select id="universe"></select>
+      <button id="rename-universe" class="icon" title="Renommer ce contexte">✎</button>
+      <button id="new-universe" class="icon" title="Nouveau contexte">+</button>
+      <button id="delete-universe" class="icon danger" title="Supprimer ce contexte">🗑</button>
+    </div>
     <nav>
       <button data-view="mj" class="active">Assistant MJ</button>
       <button data-view="joueur">Aide joueurs</button>
@@ -35,6 +42,10 @@
           <div class="chat-header">
             <input id="chat-title" aria-label="Titre de la conversation">
             <button id="delete-conversation" class="danger">Supprimer</button>
+          </div>
+          <div id="cast" class="cast" hidden>
+            <span class="cast-label">Personnages concernés :</span>
+            <span id="cast-chips"></span>
           </div>
           <div id="messages"></div>
           <form id="composer">

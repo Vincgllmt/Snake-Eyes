@@ -10,6 +10,10 @@ et ton abonnement Claude** (Pro/Max) : pas de clé API, pas de facturation à l'
   aider à créer ou vérifier une fiche de personnage.
 - **Univers** et **Personnages** : éditeurs intégrés pour le contexte envoyé à Claude.
 
+Tout est rangé par **contexte** (sélecteur en haut de l'écran, par exemple une campagne) :
+chaque contexte a son univers (sections d'histoire, lieux, règles…), ses personnages
+et ses conversations.
+
 ## Lancement avec Docker (recommandé)
 
 1. Génère un jeton lié à ton abonnement (une seule fois, sur ta machine) :
@@ -45,11 +49,12 @@ uvicorn app.main:app --reload
 |---------------------------------|:-------:|:-----------:|
 | Sections d'univers publiques    | ✅      | ✅          |
 | Sections d'univers « secret »   | ✅      | ❌          |
-| Fiches des personnages          | toutes  | celle choisie à la création de la conversation (les autres : nom + joueur) |
-| Notes MJ des personnages        | ✅      | ❌          |
+| Fiches des personnages          | celles cochées dans la conversation (les autres : nom seulement, comme absents) | celle choisie à la création de la conversation (les autres : nom + joueur) |
+| Notes MJ des personnages        | ✅ (personnages cochés) | ❌          |
 
-Si tu modifies l'univers ou une fiche pendant une conversation, la nouvelle
-version est transmise automatiquement au message suivant.
+Claude ne voit que le contexte de la conversation. Si tu modifies l'univers, une
+fiche ou les personnages cochés pendant une conversation, la nouvelle version est
+transmise automatiquement au message suivant.
 
 Chaque conversation est une session Claude Code (reprise à chaque message), sans
 aucun outil : Claude ne peut ni lire tes fichiers, ni lancer de commandes, ni aller

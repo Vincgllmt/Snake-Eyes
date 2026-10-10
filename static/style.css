@@ -92,3 +92,21 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
   .list { width: 100%; max-height: 30vh; border-right: none; border-bottom: 1px solid var(--border); }
   #messages, #composer, #editor-form, .chat-header { padding-left: 16px; padding-right: 16px; }
 }
+
+/* Univers */
+.universe-picker { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
+.universe-picker select { width: auto; min-width: 160px; padding: 6px 8px; color: var(--text); }
+.universe-picker button.icon { padding: 5px 9px; line-height: 1; }
+
+/* Personnages concernés (mode MJ) */
+.cast { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 20px; border-bottom: 1px solid var(--border); }
+.cast[hidden] { display: none; }
+.cast-label { color: var(--muted); font-size: .85rem; margin-right: 4px; }
+.chip { padding: 4px 12px; border-radius: 999px; font-size: .85rem; background: none; color: var(--muted); border: 1px dashed var(--border); }
+.chip.on { background: var(--user); color: var(--text); border: 1px solid var(--accent); }
+.cast .hint { font-size: .85rem; }
+
+@media (max-width: 760px) {
+  .universe-picker select { min-width: 0; }
+  .cast { padding-left: 16px; padding-right: 16px; }
+}

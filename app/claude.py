@@ -9,9 +9,10 @@ dialogue avec le contexte de la campagne en prompt système.
 
 import os
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, StreamEvent, query
+
+from . import db
 
 # Une clé API présente dans l'environnement serait prioritaire sur l'abonnement.
 os.environ.pop("ANTHROPIC_API_KEY", None)
@@ -22,7 +23,7 @@ EFFORT = {
     "joueur": os.getenv("SNAKE_EYES_EFFORT_JOUEUR", "medium"),
 }
 # Dossier de travail des sessions, isolé du reste (pas de CLAUDE.md ni de réglages projet).
-SESSIONS_DIR = Path(__file__).resolve().parent.parent / "data" / "sessions"
+SESSIONS_DIR = db.DB_PATH.parent / "sessions"
 
 
 class ClaudeError(Exception):
