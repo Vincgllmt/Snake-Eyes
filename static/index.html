@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Snake Eyes</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🎲🎲 Snake Eyes</h1>
+    <nav>
+      <button data-view="mj" class="active">Assistant MJ</button>
+      <button data-view="joueur">Aide joueurs</button>
+      <button data-view="lore">Univers</button>
+      <button data-view="characters">Personnages</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Chat (partagé entre les modes MJ et joueur) -->
+    <section id="view-chat" class="view">
+      <aside class="list">
+        <div class="list-actions">
+          <select id="new-character" title="Fiche du joueur (optionnel)" hidden></select>
+          <button id="new-conversation" class="primary">+ Nouvelle conversation</button>
+        </div>
+        <ul id="conversations"></ul>
+      </aside>
+      <div class="chat">
+        <div id="chat-empty" class="empty">Crée ou sélectionne une conversation.</div>
+        <div id="chat-panel" hidden>
+          <div class="chat-header">
+            <input id="chat-title" aria-label="Titre de la conversation">
+            <button id="delete-conversation" class="danger">Supprimer</button>
+          </div>
+          <div id="messages"></div>
+          <form id="composer">
+            <textarea id="input" rows="3" placeholder="Écris ton message… (Entrée pour envoyer, Maj+Entrée pour un retour à la ligne)"></textarea>
+            <button type="submit" class="primary" id="send">Envoyer</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- Éditeur générique (univers / personnages) -->
+    <section id="view-editor" class="view" hidden>
+      <aside class="list">
+        <div class="list-actions">
+          <button id="new-item" class="primary">+ Ajouter</button>
+        </div>
+        <ul id="items"></ul>
+      </aside>
+      <div class="editor">
+        <div id="editor-empty" class="empty"></div>
+        <form id="editor-form" hidden></form>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

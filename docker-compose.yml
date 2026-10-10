@@ -1,0 +1,9 @@
+services:
+  snake-eyes:
+    build: .
+    ports:
+      - "127.0.0.1:8000:8000"   # accessible uniquement depuis ta machine
+    env_file: .env              # doit contenir CLAUDE_CODE_OAUTH_TOKEN (voir .env.example)
+    volumes:
+      - ./data:/app/data        # base SQLite + sessions Claude Code
+    restart: unless-stopped
