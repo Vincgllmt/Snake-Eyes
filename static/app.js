@@ -270,9 +270,13 @@ $("#composer").addEventListener("submit", async (e) => {
 
 // Champ Markdown édité en WYSIWYG : la textarea cachée porte la valeur lue par le formulaire,
 // l'éditeur est monté dans le div voisin par mountMarkdownEditors().
-const mdField = (name, label, value, size) => `
+const mdField = (name, label, value, size, { docx = false } = {}) => `
   <div class="field">
-    <span>${label}</span>
+    <div class="field-head">
+      <span>${label}</span>
+      ${docx ? `<label class="import-docx" title="Remplace le contenu par celui d'un document Word">
+        Importer un .docx<input type="file" accept=".docx" hidden></label>` : ""}
+    </div>
     <textarea name="${name}" class="md" data-size="${size}" hidden>${escape(value)}</textarea>
     <div class="md-editor"></div>
   </div>`;
@@ -309,8 +313,52 @@ function mountMarkdownEditors(form) {
         ["code", "codeblock"],
       ],
     });
+    const importer = textarea.closest(".field").querySelector(".import-docx");
+    if (importer) {
+      if (window.mammoth) importer.querySelector("input").addEventListener("change", (e) => importDocx(e.target, editor));
+      else importer.hidden = true;
+    }
     return { textarea, editor };
   });
+}
+
+// Un tableau Markdown exige une ligne d'en-tête et des cellules d'une seule ligne :
+// on promeut la première ligne en <thead> et on aplatit les paragraphes des cellules.
+function normalizeDocxTables(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("table").forEach((table) => {
+    table.querySelectorAll("td, th").forEach((cell) => {
+      const parts = [...cell.querySelectorAll("p, li")].map((p) => p.innerHTML.trim()).filter(Boolean);
+      if (parts.length) cell.innerHTML = parts.join("<br>");
+    });
+    if (!table.tHead) {
+      const first = table.rows[0];
+      if (!first) return;
+      const head = table.createTHead();
+      const row = head.insertRow();
+      [...first.cells].forEach((cell) => {
+        const th = doc.createElement("th");
+        th.innerHTML = cell.innerHTML;
+        row.appendChild(th);
+      });
+      first.remove();
+    }
+  });
+  return doc.body.innerHTML;
+}
+
+async function importDocx(input, editor) {
+  const file = input.files[0];
+  input.value = ""; // permet de réimporter le même fichier
+  if (!file) return;
+  if (editor.getMarkdown().trim() && !confirm(`Remplacer le contenu actuel par celui de « ${file.name} » ?`)) return;
+  try {
+    const { value: html } = await mammoth.convertToHtml({ arrayBuffer: await file.arrayBuffer() });
+    // Les images (souvent lourdes, en base64) n'ont rien à faire dans le Markdown envoyé à Claude.
+    editor.setHTML(normalizeDocxTables(DOMPurify.sanitize(html, { FORBID_TAGS: ["img"] })));
+  } catch (err) {
+    alert(`Impossible de lire « ${file.name} » : ${err.message}`);
+  }
 }
 
 const syncMarkdownEditors = () =>
@@ -339,7 +387,7 @@ const EDITORS = {
     fields: (it) => `
       <label>Nom du personnage<input name="name" required value="${escape(it.name)}"></label>
       <label>Joueur<input name="player" value="${escape(it.player)}"></label>
-      ${mdField("sheet", "Fiche (caractéristiques, compétences, historique…)", it.sheet, "big")}
+      ${mdField("sheet", "Fiche (caractéristiques, compétences, historique…)", it.sheet, "big", { docx: true })}
       ${mdField("gm_notes", "Notes MJ (secrets, arcs prévus — invisibles en mode joueur)", it.gm_notes, "small")}`,
     read: (f) => ({ name: f.name.value, player: f.player.value, sheet: f.sheet.value, gm_notes: f.gm_notes.value }),
   },

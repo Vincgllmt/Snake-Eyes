@@ -122,3 +122,10 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 .toastui-editor-dark .toastui-editor-md-container { background: var(--bg); }
 .toastui-editor-defaultUI button { padding: 0; } /* annule le padding global des boutons */
 .toastui-editor-contents { font-family: inherit; font-size: .95rem; }
+#editor-form .field-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#editor-form label.import-docx {
+  display: inline-block; cursor: pointer; color: var(--text); font-size: .85rem;
+  border: 1px solid var(--border); background: var(--panel-2); padding: 5px 12px; border-radius: 6px;
+}
+#editor-form label.import-docx:hover { border-color: var(--muted); }
+#editor-form label.import-docx[hidden] { display: none; }
