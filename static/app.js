@@ -268,6 +268,54 @@ $("#composer").addEventListener("submit", async (e) => {
 
 // --- Sections d'univers & personnages -----------------------------------------
 
+// Champ Markdown édité en WYSIWYG : la textarea cachée porte la valeur lue par le formulaire,
+// l'éditeur est monté dans le div voisin par mountMarkdownEditors().
+const mdField = (name, label, value, size) => `
+  <div class="field">
+    <span>${label}</span>
+    <textarea name="${name}" class="md" data-size="${size}" hidden>${escape(value)}</textarea>
+    <div class="md-editor"></div>
+  </div>`;
+
+const Editor = typeof window.toastui?.Editor === "function" ? window.toastui.Editor : null;
+const colorSyntax = Editor?.plugin?.colorSyntax || Editor?.plugin?.uml; // le plugin s'enregistre sous « uml » (bug upstream)
+let mdEditors = [];
+
+function mountMarkdownEditors(form) {
+  mdEditors.forEach(({ editor }) => editor.destroy());
+  const textareas = [...form.querySelectorAll("textarea.md")];
+  if (!Editor) {
+    // Éditeur indisponible (CDN injoignable…) : on retombe sur les textareas Markdown.
+    textareas.forEach((t) => { t.hidden = false; t.classList.add(t.dataset.size); });
+    mdEditors = [];
+    return;
+  }
+  mdEditors = textareas.map((textarea) => {
+    const editor = new Editor({
+      el: textarea.nextElementSibling,
+      initialValue: textarea.value,
+      initialEditType: "wysiwyg",
+      previewStyle: "tab",
+      height: textarea.dataset.size === "big" ? "520px" : "280px",
+      language: "fr-FR",
+      theme: "dark",
+      usageStatistics: false,
+      plugins: colorSyntax ? [colorSyntax] : [],
+      toolbarItems: [
+        ["heading", "bold", "italic", "strike"],
+        ["hr", "quote"],
+        ["ul", "ol", "task", "indent", "outdent"],
+        ["table", "link"],
+        ["code", "codeblock"],
+      ],
+    });
+    return { textarea, editor };
+  });
+}
+
+const syncMarkdownEditors = () =>
+  mdEditors.forEach(({ textarea, editor }) => (textarea.value = editor.getMarkdown()));
+
 const EDITORS = {
   lore: {
     url: "/api/lore",
@@ -278,7 +326,7 @@ const EDITORS = {
       <label>Titre<input name="title" required value="${escape(it.title)}"></label>
       <label>Ordre d'affichage<input name="position" type="number" value="${it.position}"></label>
       <label class="check"><input name="secret" type="checkbox" ${it.secret ? "checked" : ""}> Secret — réservé au MJ</label>
-      <label>Contenu (Markdown)<textarea name="content" class="big">${escape(it.content)}</textarea></label>`,
+      ${mdField("content", "Contenu", it.content, "big")}`,
     read: (f) => ({
       title: f.title.value, content: f.content.value, secret: f.secret.checked, position: Number(f.position.value) || 0,
     }),
@@ -291,8 +339,8 @@ const EDITORS = {
     fields: (it) => `
       <label>Nom du personnage<input name="name" required value="${escape(it.name)}"></label>
       <label>Joueur<input name="player" value="${escape(it.player)}"></label>
-      <label>Fiche (Markdown : caractéristiques, compétences, historique…)<textarea name="sheet" class="big">${escape(it.sheet)}</textarea></label>
-      <label>Notes MJ (secrets, arcs prévus — invisibles en mode joueur)<textarea name="gm_notes" rows="6">${escape(it.gm_notes)}</textarea></label>`,
+      ${mdField("sheet", "Fiche (caractéristiques, compétences, historique…)", it.sheet, "big")}
+      ${mdField("gm_notes", "Notes MJ (secrets, arcs prévus — invisibles en mode joueur)", it.gm_notes, "small")}`,
     read: (f) => ({ name: f.name.value, player: f.player.value, sheet: f.sheet.value, gm_notes: f.gm_notes.value }),
   },
 };
@@ -320,13 +368,18 @@ function showEditor(item) {
   $("#editor-empty").hidden = !!item;
   $("#editor-empty").textContent = ed.empty;
   form.hidden = !item;
-  if (!item) return;
+  if (!item) {
+    form.replaceChildren();
+    mountMarkdownEditors(form); // détruit les éditeurs précédents
+    return;
+  }
   form.innerHTML = ed.fields(item) + `
     <div class="editor-actions">
       <button type="submit" class="primary">Enregistrer</button>
       ${item.id ? `<button type="button" class="danger" id="delete-item">Supprimer</button>` : ""}
       <span class="saved" id="saved" hidden>Enregistré ✓</span>
     </div>`;
+  mountMarkdownEditors(form);
   $("#delete-item")?.addEventListener("click", async () => {
     await api("DELETE", `${ed.url}/${item.id}`);
     state.itemId = null;
@@ -345,6 +398,7 @@ $("#new-item").addEventListener("click", () => {
 $("#editor-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const ed = EDITORS[state.view];
+  syncMarkdownEditors();
   const data = { ...ed.read(e.target), universe_id: state.universeId };
   if (state.itemId) await api("PUT", `${ed.url}/${state.itemId}`, data);
   else state.itemId = (await api("POST", ed.url, data)).id;

@@ -110,3 +110,15 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
   .universe-picker select { min-width: 0; }
   .cast { padding-left: 16px; padding-right: 16px; }
 }
+
+/* Éditeur WYSIWYG (Toast UI) */
+#editor-form .field { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: .9rem; }
+#editor-form .md-editor { color: var(--text); font-size: 1rem; }
+.toastui-editor-dark.toastui-editor-defaultUI { border-color: var(--border); border-radius: 6px; }
+.toastui-editor-dark .toastui-editor-defaultUI-toolbar,
+.toastui-editor-dark .toastui-editor-mode-switch { background: var(--panel); border-color: var(--border); }
+.toastui-editor-dark .toastui-editor-main,
+.toastui-editor-dark .ProseMirror,
+.toastui-editor-dark .toastui-editor-md-container { background: var(--bg); }
+.toastui-editor-defaultUI button { padding: 0; } /* annule le padding global des boutons */
+.toastui-editor-contents { font-family: inherit; font-size: .95rem; }
