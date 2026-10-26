@@ -31,6 +31,19 @@ Les données (base SQLite et sessions Claude Code) sont dans `data/`, à côté 
 elles survivent aux redémarrages et mises à jour du conteneur. Pour arrêter :
 `docker compose down`.
 
+## Lancement comme une application (Windows)
+
+Une fois Docker (ou le venv ci-dessous) prêt, crée les raccourcis Bureau et menu Démarrer :
+
+```bash
+.venv/Scripts/python launcher/install_shortcuts.py
+```
+
+Le raccourci « Snake Eyes » démarre Docker Desktop et le conteneur si besoin (sinon,
+sans Docker, le serveur du venv), puis ouvre l'appli dans sa propre fenêtre Chrome/Edge.
+On peut aussi l'installer comme application depuis le navigateur (icône « Installer »
+dans la barre d'adresse). Les icônes se régénèrent avec `launcher/make_icons.py` (Pillow).
+
 ## Lancement sans Docker
 
 Nécessite Python 3.10+ et [Claude Code](https://claude.com/claude-code) connecté à ton
