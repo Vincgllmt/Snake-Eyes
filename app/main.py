@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException  # noqa: E402
+from fastapi import FastAPI, HTTPException, Request  # noqa: E402
 from fastapi.responses import FileResponse, StreamingResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
@@ -21,6 +21,17 @@ CONTEXT_NOTICE = "Contexte mis à jour (univers, fiches ou personnages concerné
 
 app = FastAPI(title="Snake Eyes")
 db.init()
+
+
+@app.middleware("http")
+async def revalidate_interface(request: Request, call_next):
+    """Sans consigne, le navigateur garde l'interface en cache et ne voit pas les
+    mises à jour : on lui demande de revalider à chaque chargement (réponse 304
+    si rien n'a changé, donc sans surcoût)."""
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 def _require_universe(universe_id: int) -> None:
