@@ -2,6 +2,7 @@
 sections d'univers (lore), personnages, conversations et messages."""
 
 import os
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS characters (
 CREATE TABLE IF NOT EXISTS conversations (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     universe_id  INTEGER REFERENCES universes(id) ON DELETE CASCADE,
-    mode         TEXT NOT NULL CHECK (mode IN ('mj', 'joueur')),
+    mode         TEXT NOT NULL CHECK (mode IN ('mj', 'creation', 'joueur')),
     title        TEXT NOT NULL,
     character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL,  -- mode joueur : sa fiche
     system       TEXT NOT NULL,              -- figé à la création de la conversation
@@ -61,9 +62,32 @@ def init() -> None:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with connect() as db:
         db.executescript(SCHEMA)
+        _migrate_modes(db)
         _migrate(db)
         if not db.execute("SELECT 1 FROM universes").fetchone():
             db.execute("INSERT INTO universes (name) VALUES (?)", (DEFAULT_UNIVERSE,))
+
+
+def _migrate_modes(db) -> None:
+    """Bases créées avant l'Aide MJ : la contrainte CHECK sur `mode` n'accepte pas
+    'creation'. SQLite ne sait pas modifier une contrainte : on reconstruit la table
+    à l'identique (mêmes colonnes, mêmes ids), clés étrangères désactivées pour que
+    la suppression de l'ancienne table n'emporte pas les messages."""
+    sql = db.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'conversations'").fetchone()[0]
+    if "'creation'" in sql:
+        return
+    new_sql = sql.replace("('mj', 'joueur')", "('mj', 'creation', 'joueur')", 1)
+    new_sql = re.sub(r"^CREATE TABLE \"?conversations\"?", "CREATE TABLE conversations_new", new_sql)
+    db.execute("PRAGMA foreign_keys = OFF")
+    db.executescript(
+        "BEGIN;"
+        + new_sql + ";"
+        "INSERT INTO conversations_new SELECT * FROM conversations;"
+        "DROP TABLE conversations;"
+        "ALTER TABLE conversations_new RENAME TO conversations;"
+        "COMMIT;"
+    )
+    db.execute("PRAGMA foreign_keys = ON")
 
 
 def _migrate(db) -> None:

@@ -20,6 +20,7 @@ os.environ.pop("ANTHROPIC_API_KEY", None)
 MODEL = os.getenv("SNAKE_EYES_MODEL") or None  # None = modèle par défaut de Claude Code
 EFFORT = {
     "mj": os.getenv("SNAKE_EYES_EFFORT_MJ", "high"),
+    "creation": os.getenv("SNAKE_EYES_EFFORT_MJ", "high"),
     "joueur": os.getenv("SNAKE_EYES_EFFORT_JOUEUR", "medium"),
 }
 # Dossier de travail des sessions, isolé du reste (pas de CLAUDE.md ni de réglages projet).

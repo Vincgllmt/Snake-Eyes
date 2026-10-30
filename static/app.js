@@ -79,7 +79,7 @@ document.querySelectorAll("nav button").forEach((btn) =>
 async function showView(view) {
   state.view = view;
   document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
-  const isChat = view === "mj" || view === "joueur";
+  const isChat = CHAT_MODES.includes(view);
   $("#view-chat").hidden = !isChat;
   $("#view-editor").hidden = isChat;
   if (isChat) {
@@ -96,6 +96,15 @@ async function showView(view) {
 }
 
 // --- Conversations ------------------------------------------------------------
+
+const CHAT_MODES = ["mj", "creation", "joueur"];
+const WELCOME = {
+  mj: "Choisis les personnages concernés ci-dessus, puis pose une question, décris une situation de jeu ou demande des idées.",
+  creation: "Demande une quête, un PNJ, un lieu, une faction, un objet… Claude connaît tout l'univers et tous les personnages. Chaque réponse peut être ajoutée à l'univers avec le bouton en dessous.",
+  joueur: "Demande de l'aide pour créer ou vérifier une fiche, ou pose une question sur l'univers et les règles.",
+};
+// Réponses que le MJ peut verser dans l'univers (jamais en mode joueur).
+const canSaveToLore = () => state.view !== "joueur";
 
 const charactersOf = () => api("GET", `/api/characters?universe_id=${state.universeId}`);
 
@@ -141,13 +150,10 @@ async function openConversation(id) {
   await renderCast();
   $("#messages").innerHTML = "";
   for (const m of conv.messages) {
-    addMessage(m.role, m.text);
+    const div = addMessage(m.role, m.text);
+    if (m.role === "assistant") addLoreButton(div, m.text);
   }
-  if (!conv.messages.length) {
-    addMessage("notice", state.view === "mj"
-      ? "Choisis les personnages concernés ci-dessus, puis pose une question, décris une situation de jeu ou demande des idées."
-      : "Demande de l'aide pour créer ou vérifier une fiche, ou pose une question sur l'univers et les règles.");
-  }
+  if (!conv.messages.length) addMessage("notice", WELCOME[state.view]);
   await loadConversations();
 }
 
@@ -181,6 +187,78 @@ function addMessage(role, text) {
   $("#messages").scrollTop = $("#messages").scrollHeight;
   return div;
 }
+
+// --- Ajout d'une réponse à l'univers ------------------------------------------
+
+function addLoreButton(div, text) {
+  if (!canSaveToLore()) return;
+  const btn = Object.assign(document.createElement("button"), {
+    type: "button", className: "to-lore", textContent: "＋ Ajouter à l'univers",
+  });
+  btn.addEventListener("click", () => openLoreDialog(text));
+  div.appendChild(btn);
+}
+
+// Un titre Markdown en première ligne devient le titre de la section.
+function splitTitle(text) {
+  const match = text.trim().match(/^#{1,6}\s+(.+?)\s*#*\s*(?:\n|$)/);
+  return match
+    ? { title: match[1].replace(/[*_`]/g, "").trim(), content: text.trim().slice(match[0].length).trim() }
+    : { title: "", content: text.trim() };
+}
+
+let loreSections = [];
+
+async function openLoreDialog(text) {
+  loreSections = await api("GET", `/api/lore?universe_id=${state.universeId}`);
+  const f = $("#to-lore-form");
+  const { title, content } = splitTitle(text);
+  f.destination.innerHTML = `<option value="">Nouvelle section</option>` +
+    loreSections.map((l) => `<option value="${l.id}">À la suite de : ${l.secret ? "🔒 " : ""}${escape(l.title)}</option>`).join("");
+  f.title.value = title;
+  f.content.value = content;
+  f.secret.checked = true;
+  updateLoreDialog();
+  $("#to-lore").showModal();
+  f.title.focus();
+}
+
+// À la suite d'une section existante : le titre devient un intertitre et le statut secret est celui de la section.
+function updateLoreDialog() {
+  const f = $("#to-lore-form");
+  const section = loreSections.find((l) => l.id === Number(f.destination.value));
+  $("#to-lore-title-label").textContent = section ? "Intertitre" : "Titre de la section";
+  f.title.required = !section;
+  f.secret.disabled = !!section;
+  if (section) f.secret.checked = !!section.secret;
+}
+
+$("#to-lore-form").destination.addEventListener("change", updateLoreDialog);
+$("#to-lore-cancel").addEventListener("click", () => $("#to-lore").close());
+
+$("#to-lore-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const title = f.title.value.trim();
+  const content = f.content.value.trim();
+  const section = loreSections.find((l) => l.id === Number(f.destination.value));
+  try {
+    if (section) {
+      const added = (title ? `## ${title}\n\n` : "") + content;
+      await api("PUT", `/api/lore/${section.id}`, {
+        ...section, content: [section.content.trimEnd(), added].filter(Boolean).join("\n\n"),
+      });
+    } else {
+      const position = Math.max(0, ...loreSections.map((l) => l.position));
+      await api("POST", "/api/lore", { universe_id: state.universeId, title, content, secret: f.secret.checked, position });
+    }
+  } catch (err) {
+    alert(`Impossible d'ajouter à l'univers : ${err.message}`);
+    return;
+  }
+  $("#to-lore").close();
+  addMessage("notice", `Ajouté à l'univers : « ${section ? section.title : title} ».`);
+});
 
 $("#chat-title").addEventListener("change", async () => {
   await api("PUT", `/api/conversations/${state.conversationId}`, { title: $("#chat-title").value });
@@ -247,6 +325,7 @@ $("#composer").addEventListener("submit", async (e) => {
           throw new Error(ev.message);
         } else if (ev.type === "done") {
           ok = true;
+          addLoreButton(replyDiv, reply);
           if (ev.truncated) addMessage("notice", "Réponse tronquée (longueur maximale atteinte).");
         }
       }

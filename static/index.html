@@ -34,6 +34,7 @@
     </div>
     <nav>
       <button data-view="mj" class="active">Assistant MJ</button>
+      <button data-view="creation">Aide MJ</button>
       <button data-view="joueur">Aide joueurs</button>
       <button data-view="lore">Univers</button>
       <button data-view="characters">Personnages</button>
@@ -84,6 +85,25 @@
       </div>
     </section>
   </main>
+
+  <!-- Ajout d'une réponse de Claude à l'univers -->
+  <dialog id="to-lore">
+    <form id="to-lore-form" method="dialog">
+      <h2>Ajouter à l'univers</h2>
+      <label>Destination
+        <select name="destination"></select>
+      </label>
+      <label><span id="to-lore-title-label">Titre</span><input name="title" required></label>
+      <label class="check"><input name="secret" type="checkbox" checked> Secret — réservé au MJ</label>
+      <label>Contenu (Markdown, modifiable ensuite dans l'onglet Univers)
+        <textarea name="content" rows="14"></textarea>
+      </label>
+      <div class="editor-actions">
+        <button type="submit" class="primary" value="save">Ajouter</button>
+        <button type="button" id="to-lore-cancel">Annuler</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="/static/app.js"></script>
 </body>

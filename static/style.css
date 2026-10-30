@@ -129,3 +129,18 @@ input:focus, textarea:focus, select:focus { outline: none; border-color: var(--a
 }
 #editor-form label.import-docx:hover { border-color: var(--muted); }
 #editor-form label.import-docx[hidden] { display: none; }
+
+/* Ajout d'une réponse à l'univers */
+.msg.assistant button.to-lore { display: block; margin: 12px 0 0; padding: 4px 12px; font-size: .85rem; color: var(--muted); background: none; }
+.msg.assistant button.to-lore:hover { color: var(--text); }
+dialog#to-lore {
+  width: min(760px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 0;
+  background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+}
+dialog#to-lore::backdrop { background: rgb(0 0 0 / .6); }
+#to-lore-form { padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+#to-lore-form h2 { margin: 0; font-size: 1.1rem; }
+#to-lore-form label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font-size: .9rem; }
+#to-lore-form label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
+#to-lore-form label.check input { width: auto; }
+#to-lore-form textarea { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .9rem; }

@@ -1,4 +1,4 @@
-"""Snake Eyes — assistant MJ et aide aux joueurs, propulsé par Claude."""
+"""Snake Eyes — assistant MJ, aide MJ et aide aux joueurs, propulsé par Claude."""
 
 import json
 from pathlib import Path
@@ -156,7 +156,7 @@ def list_conversations(mode: str, universe_id: int):
 
 @app.post("/api/conversations")
 def create_conversation(body: ConversationIn):
-    if body.mode not in ("mj", "joueur"):
+    if body.mode not in ("mj", "creation", "joueur"):
         raise HTTPException(400, "mode invalide")
     _require_universe(body.universe_id)
     character_id, character_ids = None, []

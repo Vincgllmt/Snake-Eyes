@@ -6,6 +6,11 @@ et ton abonnement Claude** (Pro/Max) : pas de clé API, pas de facturation à l'
 - **Assistant MJ** : une fenêtre de discussion avec Claude, qui connaît l'univers
   de la campagne et les fiches des personnages, pour trouver des idées (accroches,
   PNJ, rebondissements), improviser en séance ou arbitrer une règle.
+- **Aide MJ** : pour préparer la campagne. Claude rédige à la demande des quêtes,
+  PNJ, lieux, factions, objets… en s'appuyant sur tout l'univers et tous les
+  personnages. Le bouton « Ajouter à l'univers » sous chaque réponse (aussi dans
+  l'Assistant MJ) l'enregistre comme nouvelle section — secrète par défaut — ou
+  à la suite d'une section existante.
 - **Aide joueurs** : la même chose, mais limitée aux informations publiques, pour
   aider à créer ou vérifier une fiche de personnage.
 - **Univers** et **Personnages** : éditeurs intégrés pour le contexte envoyé à Claude.
@@ -73,6 +78,9 @@ Chaque conversation est une session Claude Code (reprise à chaque message), san
 aucun outil : Claude ne peut ni lire tes fichiers, ni lancer de commandes, ni aller
 sur le web. Tes réglages, hooks et CLAUDE.md personnels ne sont pas chargés.
 L'usage compte dans les limites de ton abonnement, comme Claude Code.
+
+L'Aide MJ voit la même chose que le mode MJ, avec toujours tous les personnages
+du contexte (fiches et notes MJ).
 
 > ⚠️ Le filtrage des secrets ne concerne que ce qui est envoyé à Claude : les onglets
 > Univers / Personnages restent lisibles par quiconque utilise l'appli.

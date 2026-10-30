@@ -27,6 +27,30 @@ du MJ. Réponds en français, de façon structurée et directe, sans préambule.
 N'invente pas de faits sur l'univers en les présentant comme établis : distingue \
 « établi » de « proposition »."""
 
+CREATION_INSTRUCTIONS = """\
+Tu aides le meneur de jeu (MJ) à préparer une campagne de jeu de rôle sur table \
+se déroulant dans l'univers maison décrit ci-dessous. Ce contexte (univers, règles, \
+personnages des joueurs, notes du MJ) fait autorité : ce que tu crées doit s'y \
+intégrer sans le contredire.
+
+Ton rôle : rédiger, à la demande du MJ, des éléments prêts à être ajoutés à \
+l'univers de la campagne — quêtes et scénarios, PNJ, lieux, factions, objets, \
+créatures, rumeurs, tables aléatoires…
+- Sois concret et jouable : noms, motivations, enjeux, indices, obstacles, \
+  récompenses, statistiques si les règles fournies en prévoient.
+- Rattache tes créations à l'existant : lieux, factions et intrigues déjà établis, \
+  et surtout les historiques, objectifs et failles des personnages des joueurs.
+- Si la demande est vague, fais des choix et assume-les plutôt que de poser des \
+  questions ; le MJ demandera des modifications.
+- Quand le MJ demande une modification, renvoie l'élément complet mis à jour, \
+  pas seulement le passage modifié.
+
+Format : ta réponse est destinée à être enregistrée telle quelle comme section de \
+l'univers. Écris en Markdown, commence directement par un titre de niveau 1 \
+(`# Nom de l'élément`), sans préambule ni conclusion, et utilise des intertitres \
+de niveau 2 ou plus. Sépare ce que les joueurs peuvent découvrir de ce qui reste \
+réservé au MJ (secrets, vérité cachée, plans des PNJ). Réponds en français."""
+
 JOUEUR_INSTRUCTIONS = """\
 Tu aides un joueur d'une campagne de jeu de rôle sur table se déroulant dans \
 l'univers maison décrit ci-dessous. Le contexte fourni (univers et règles publics, \
@@ -78,13 +102,14 @@ def build_context(mode: str, universe_id: int, character_id: int | None = None,
 
     Mode MJ : `character_ids` = personnages concernés (fiches complètes + notes MJ),
     les autres personnages de l'univers sont seulement nommés comme absents.
+    Mode création (Aide MJ) : même contexte que le MJ, avec tous les personnages.
     Mode joueur : `character_id` = fiche du joueur (sans notes MJ), univers public seulement."""
     universe = db.get_universe(universe_id)
     name = universe["name"] if universe else "?"
     characters = db.list_characters(universe_id)
 
-    if mode == "mj":
-        selected = set(character_ids or [])
+    if mode in ("mj", "creation"):
+        selected = {c["id"] for c in characters} if mode == "creation" else set(character_ids or [])
         involved = [c for c in characters if c["id"] in selected]
         absent = [c for c in characters if c["id"] not in selected]
         blocks = "\n\n".join(_character_block(c, with_gm_notes=True) for c in involved)
@@ -111,7 +136,7 @@ def conversation_context(conv: dict) -> str:
 
 
 def instructions(mode: str) -> str:
-    return MJ_INSTRUCTIONS if mode == "mj" else JOUEUR_INSTRUCTIONS
+    return {"mj": MJ_INSTRUCTIONS, "creation": CREATION_INSTRUCTIONS}.get(mode, JOUEUR_INSTRUCTIONS)
 
 
 def context_hash(context: str) -> str:
