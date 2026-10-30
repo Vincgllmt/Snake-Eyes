@@ -56,6 +56,7 @@
         <div id="chat-panel" hidden>
           <div class="chat-header">
             <input id="chat-title" aria-label="Titre de la conversation">
+            <span id="chat-size" class="chat-size" hidden></span>
             <button id="delete-conversation" class="danger">Supprimer</button>
           </div>
           <div id="cast" class="cast" hidden>
@@ -86,6 +87,9 @@
     </section>
   </main>
 
+  <!-- Groupes de sections d'univers proposés à la saisie -->
+  <datalist id="lore-groups"></datalist>
+
   <!-- Ajout d'une réponse de Claude à l'univers -->
   <dialog id="to-lore">
     <form id="to-lore-form" method="dialog">
@@ -94,6 +98,7 @@
         <select name="destination"></select>
       </label>
       <label><span id="to-lore-title-label">Titre</span><input name="title" required></label>
+      <label>Groupe (PNJ, Lieux, Quêtes… — vide = général)<input name="category" list="lore-groups" autocomplete="off"></label>
       <label class="check"><input name="secret" type="checkbox" checked> Secret — réservé au MJ</label>
       <label>Contenu (Markdown, modifiable ensuite dans l'onglet Univers)
         <textarea name="content" rows="14"></textarea>

@@ -7,17 +7,17 @@ et ton abonnement Claude** (Pro/Max) : pas de clé API, pas de facturation à l'
   de la campagne et les fiches des personnages, pour trouver des idées (accroches,
   PNJ, rebondissements), improviser en séance ou arbitrer une règle.
 - **Aide MJ** : pour préparer la campagne. Claude rédige à la demande des quêtes,
-  PNJ, lieux, factions, objets… en s'appuyant sur tout l'univers et tous les
-  personnages. Le bouton « Ajouter à l'univers » sous chaque réponse (aussi dans
-  l'Assistant MJ) l'enregistre comme nouvelle section — secrète par défaut — ou
-  à la suite d'une section existante.
+  PNJ, lieux, factions, objets… en s'appuyant sur tout l'univers (mais pas sur les
+  fiches des joueurs). Le bouton « Ajouter à l'univers » sous chaque réponse (aussi
+  dans l'Assistant MJ) l'enregistre comme nouvelle section — secrète par défaut,
+  dans le groupe de ton choix (PNJ, Lieux…) — ou à la suite d'une section existante.
 - **Aide joueurs** : la même chose, mais limitée aux informations publiques, pour
   aider à créer ou vérifier une fiche de personnage.
 - **Univers** et **Personnages** : éditeurs intégrés pour le contexte envoyé à Claude.
 
 Tout est rangé par **contexte** (sélecteur en haut de l'écran, par exemple une campagne) :
-chaque contexte a son univers (sections d'histoire, lieux, règles…), ses personnages
-et ses conversations.
+chaque contexte a son univers (sections d'histoire, lieux, règles…, rangées par
+groupes comme « PNJ » ou « Lieux »), ses personnages et ses conversations.
 
 ## Lancement avec Docker (recommandé)
 
@@ -63,24 +63,29 @@ uvicorn app.main:app --reload
 
 ## Ce que voit Claude
 
-| Élément                         | Mode MJ | Mode joueur |
-|---------------------------------|:-------:|:-----------:|
-| Sections d'univers publiques    | ✅      | ✅          |
-| Sections d'univers « secret »   | ✅      | ❌          |
-| Fiches des personnages          | celles cochées dans la conversation (les autres : nom seulement, comme absents) | celle choisie à la création de la conversation (les autres : nom + joueur) |
-| Notes MJ des personnages        | ✅ (personnages cochés) | ❌          |
+| Élément                         | Assistant MJ | Aide MJ | Aide joueurs |
+|---------------------------------|:------------:|:-------:|:------------:|
+| Sections d'univers publiques    | ✅           | ✅      | ✅           |
+| Sections d'univers « secret »   | ✅           | ✅      | ❌           |
+| Fiches des personnages          | celles cochées dans la conversation (les autres : nom seulement, comme absents) | ❌ | celle choisie à la création de la conversation (les autres : nom + joueur) |
+| Notes MJ des personnages        | ✅ (personnages cochés) | ❌ | ❌     |
 
 Claude ne voit que le contexte de la conversation. Si tu modifies l'univers, une
-fiche ou les personnages cochés pendant une conversation, la nouvelle version est
-transmise automatiquement au message suivant.
+fiche ou les personnages cochés pendant une conversation, seuls les éléments
+modifiés sont transmis automatiquement au message suivant.
+
+### Consommation
+
+Chaque message fait relire à Claude tout le contexte **et tout l'historique** de la
+conversation. L'en-tête de la conversation affiche ce volume (« ≈ 45 k tokens /
+message ») et passe en alerte au-delà de 60 k : pour un nouveau sujet, mieux vaut
+démarrer une nouvelle conversation. L'effort de réflexion est à `medium` par défaut
+(réglable dans `.env`, voir `.env.example`).
 
 Chaque conversation est une session Claude Code (reprise à chaque message), sans
 aucun outil : Claude ne peut ni lire tes fichiers, ni lancer de commandes, ni aller
 sur le web. Tes réglages, hooks et CLAUDE.md personnels ne sont pas chargés.
 L'usage compte dans les limites de ton abonnement, comme Claude Code.
-
-L'Aide MJ voit la même chose que le mode MJ, avec toujours tous les personnages
-du contexte (fiches et notes MJ).
 
 > ⚠️ Le filtrage des secrets ne concerne que ce qui est envoyé à Claude : les onglets
 > Univers / Personnages restent lisibles par quiconque utilise l'appli.

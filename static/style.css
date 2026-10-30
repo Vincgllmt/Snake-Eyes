@@ -144,3 +144,12 @@ dialog#to-lore::backdrop { background: rgb(0 0 0 / .6); }
 #to-lore-form label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); }
 #to-lore-form label.check input { width: auto; }
 #to-lore-form textarea { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .9rem; }
+
+/* Taille de la conversation */
+.chat-size { align-self: center; white-space: nowrap; color: var(--muted); font-size: .8rem; cursor: help; }
+.chat-size.warn { color: #e8d9a8; background: var(--notice); padding: 4px 10px; border-radius: 999px; }
+.chat-size[hidden] { display: none; }
+
+/* Groupes de sections d'univers */
+.list li.group { cursor: default; padding: 12px 12px 4px; color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .6px; }
+.list li.group:hover { background: none; }

@@ -100,7 +100,7 @@ async function showView(view) {
 const CHAT_MODES = ["mj", "creation", "joueur"];
 const WELCOME = {
   mj: "Choisis les personnages concernés ci-dessus, puis pose une question, décris une situation de jeu ou demande des idées.",
-  creation: "Demande une quête, un PNJ, un lieu, une faction, un objet… Claude connaît tout l'univers et tous les personnages. Chaque réponse peut être ajoutée à l'univers avec le bouton en dessous.",
+  creation: "Demande une quête, un PNJ, un lieu, une faction, un objet… Claude connaît tout l'univers, secrets et PNJ compris, mais pas les fiches des joueurs. Chaque réponse peut être ajoutée à l'univers (par exemple dans le groupe PNJ) avec le bouton en dessous.",
   joueur: "Demande de l'aide pour créer ou vérifier une fiche, ou pose une question sur l'univers et les règles.",
 };
 // Réponses que le MJ peut verser dans l'univers (jamais en mode joueur).
@@ -154,7 +154,24 @@ async function openConversation(id) {
     if (m.role === "assistant") addLoreButton(div, m.text);
   }
   if (!conv.messages.length) addMessage("notice", WELCOME[state.view]);
+  renderSize(conv.tokens);
   await loadConversations();
+}
+
+// Chaque message fait relire à Claude toute la conversation : on affiche ce volume
+// pour inciter à repartir d'une conversation neuve quand elle devient lourde.
+const LONG_CONVERSATION = 60000;
+
+function renderSize(tokens) {
+  const el = $("#chat-size");
+  el.hidden = !tokens;
+  if (!tokens) return;
+  const long = tokens >= LONG_CONVERSATION;
+  el.textContent = `${long ? "⚠ " : ""}≈ ${Math.round(tokens / 1000)} k tokens / message`;
+  el.classList.toggle("warn", long);
+  el.title = long
+    ? "Conversation longue : chaque message fait relire tout l'historique à Claude et consomme beaucoup. Pour un nouveau sujet, démarre une nouvelle conversation."
+    : "Volume relu par Claude à chaque message (contexte + historique de la conversation).";
 }
 
 // Mode MJ : puces des personnages du contexte, cliquables pour les inclure ou non.
@@ -209,28 +226,51 @@ function splitTitle(text) {
 
 let loreSections = [];
 
+// Groupes déjà utilisés dans l'univers, plus quelques suggestions.
+function fillLoreGroups(sections) {
+  const groups = new Set(["PNJ", "Lieux", "Quêtes", "Factions", "Objets"]);
+  sections.forEach((l) => l.category && groups.add(l.category));
+  $("#lore-groups").innerHTML = [...groups].sort().map((g) => `<option value="${escape(g)}">`).join("");
+}
+
+// Sections regroupées par groupe (déjà triées ainsi par l'API), le groupe général en premier.
+function byGroup(sections) {
+  const groups = new Map();
+  sections.forEach((l) => groups.set(l.category, [...(groups.get(l.category) || []), l]));
+  return groups;
+}
+
 async function openLoreDialog(text) {
   loreSections = await api("GET", `/api/lore?universe_id=${state.universeId}`);
+  fillLoreGroups(loreSections);
   const f = $("#to-lore-form");
   const { title, content } = splitTitle(text);
   f.destination.innerHTML = `<option value="">Nouvelle section</option>` +
-    loreSections.map((l) => `<option value="${l.id}">À la suite de : ${l.secret ? "🔒 " : ""}${escape(l.title)}</option>`).join("");
+    [...byGroup(loreSections)].map(([group, sections]) =>
+      `<optgroup label="À la suite de… (${escape(group || "Général")})">` +
+      sections.map((l) => `<option value="${l.id}">${l.secret ? "🔒 " : ""}${escape(l.title)}</option>`).join("") +
+      `</optgroup>`).join("");
   f.title.value = title;
   f.content.value = content;
+  f.category.value = store.get("loreGroup") || "";
   f.secret.checked = true;
   updateLoreDialog();
   $("#to-lore").showModal();
   f.title.focus();
 }
 
-// À la suite d'une section existante : le titre devient un intertitre et le statut secret est celui de la section.
+// À la suite d'une section existante : le titre devient un intertitre, le groupe et
+// le statut secret sont ceux de la section.
 function updateLoreDialog() {
   const f = $("#to-lore-form");
   const section = loreSections.find((l) => l.id === Number(f.destination.value));
   $("#to-lore-title-label").textContent = section ? "Intertitre" : "Titre de la section";
   f.title.required = !section;
-  f.secret.disabled = !!section;
-  if (section) f.secret.checked = !!section.secret;
+  f.secret.disabled = f.category.disabled = !!section;
+  if (section) {
+    f.secret.checked = !!section.secret;
+    f.category.value = section.category;
+  }
 }
 
 $("#to-lore-form").destination.addEventListener("change", updateLoreDialog);
@@ -249,8 +289,10 @@ $("#to-lore-form").addEventListener("submit", async (e) => {
         ...section, content: [section.content.trimEnd(), added].filter(Boolean).join("\n\n"),
       });
     } else {
-      const position = Math.max(0, ...loreSections.map((l) => l.position));
-      await api("POST", "/api/lore", { universe_id: state.universeId, title, content, secret: f.secret.checked, position });
+      const category = f.category.value.trim();
+      const position = Math.max(0, ...loreSections.filter((l) => l.category === category).map((l) => l.position));
+      await api("POST", "/api/lore", { universe_id: state.universeId, title, content, secret: f.secret.checked, position, category });
+      store.set("loreGroup", category);
     }
   } catch (err) {
     alert(`Impossible d'ajouter à l'univers : ${err.message}`);
@@ -326,6 +368,7 @@ $("#composer").addEventListener("submit", async (e) => {
         } else if (ev.type === "done") {
           ok = true;
           addLoreButton(replyDiv, reply);
+          if (convId === state.conversationId && ev.tokens) renderSize(ev.tokens);
           if (ev.truncated) addMessage("notice", "Réponse tronquée (longueur maximale atteinte).");
         }
       }
@@ -448,14 +491,17 @@ const EDITORS = {
     url: "/api/lore",
     empty: "Ajoute des sections à l'univers de ce contexte : histoire, lieux, factions, règles, ton de la campagne… Les sections marquées « secret » ne sont jamais envoyées en mode joueur.",
     label: (it) => `${it.secret ? "🔒 " : ""}${escape(it.title)}`,
-    blank: { title: "", content: "", secret: false, position: 0 },
+    blank: { title: "", content: "", secret: false, position: 0, category: "" },
+    group: (it) => it.category || "Général",
     fields: (it) => `
       <label>Titre<input name="title" required value="${escape(it.title)}"></label>
-      <label>Ordre d'affichage<input name="position" type="number" value="${it.position}"></label>
+      <label>Groupe (PNJ, Lieux, Quêtes… — vide = général)<input name="category" list="lore-groups" autocomplete="off" value="${escape(it.category)}"></label>
+      <label>Ordre d'affichage dans le groupe<input name="position" type="number" value="${it.position}"></label>
       <label class="check"><input name="secret" type="checkbox" ${it.secret ? "checked" : ""}> Secret — réservé au MJ</label>
       ${mdField("content", "Contenu", it.content, "big")}`,
     read: (f) => ({
       title: f.title.value, content: f.content.value, secret: f.secret.checked, position: Number(f.position.value) || 0,
+      category: f.category.value,
     }),
   },
   characters: {
@@ -477,10 +523,15 @@ let items = [];
 async function loadItems() {
   const ed = EDITORS[state.view];
   items = await api("GET", `${ed.url}?universe_id=${state.universeId}`);
+  if (state.view === "lore") fillLoreGroups(items);
+  // Intertitre à chaque changement de groupe (seulement s'il y a plusieurs groupes).
+  const showGroups = ed.group && new Set(items.map(ed.group)).size > 1;
   $("#items").innerHTML = items
-    .map((it) => `<li data-id="${it.id}" class="${it.id === state.itemId ? "active" : ""}">${ed.label(it)}</li>`)
+    .map((it, i) => (showGroups && (i === 0 || ed.group(items[i - 1]) !== ed.group(it))
+      ? `<li class="group">${escape(ed.group(it))}</li>` : "") +
+      `<li data-id="${it.id}" class="${it.id === state.itemId ? "active" : ""}">${ed.label(it)}</li>`)
     .join("");
-  $("#items").querySelectorAll("li").forEach((li) =>
+  $("#items").querySelectorAll("li[data-id]").forEach((li) =>
     li.addEventListener("click", () => {
       state.itemId = Number(li.dataset.id);
       showEditor(items.find((it) => it.id === state.itemId));

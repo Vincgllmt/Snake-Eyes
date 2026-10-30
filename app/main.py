@@ -78,6 +78,7 @@ class LoreIn(BaseModel):
     content: str = ""
     secret: bool = False
     position: int = 0
+    category: str = ""
 
 
 @app.get("/api/lore")
@@ -88,12 +89,13 @@ def list_lore(universe_id: int):
 @app.post("/api/lore")
 def create_lore(body: LoreIn):
     _require_universe(body.universe_id)
-    return {"id": db.save_lore(None, body.universe_id, body.title, body.content, body.secret, body.position)}
+    return {"id": db.save_lore(None, body.universe_id, body.title, body.content, body.secret, body.position,
+                               body.category.strip())}
 
 
 @app.put("/api/lore/{lore_id}")
 def update_lore(lore_id: int, body: LoreIn):
-    db.save_lore(lore_id, body.universe_id, body.title, body.content, body.secret, body.position)
+    db.save_lore(lore_id, body.universe_id, body.title, body.content, body.secret, body.position, body.category.strip())
     return {"id": lore_id}
 
 
@@ -178,7 +180,7 @@ def create_conversation(body: ConversationIn):
         character_id = body.character_id
     if body.mode == "mj":
         character_ids = _universe_character_ids(body.universe_id, body.character_ids)
-    context = prompts.build_context(body.mode, body.universe_id, character_id, character_ids)
+    context, _ = prompts.build_context(body.mode, body.universe_id, character_id, character_ids)
     system = prompts.instructions(body.mode) + "\n\n" + context
     conversation_id = db.create_conversation(
         body.mode, body.universe_id, DEFAULT_TITLE, character_id, character_ids,
@@ -199,6 +201,7 @@ def get_conversation(conversation_id: int):
         "title": conv["title"],
         "character_id": conv["character_id"],
         "character_ids": conv["character_ids"],
+        "tokens": conv["last_tokens"],
         "messages": [{"id": m["id"], "role": m["role"], "text": m["content"]} for m in db.list_messages(conversation_id)],
     }
 
@@ -236,14 +239,16 @@ async def send_message(conversation_id: int, body: MessageIn):
         raise HTTPException(400, "message vide")
 
     # Si l'univers, les fiches ou la sélection de personnages ont changé depuis le
-    # dernier échange, la nouvelle version accompagne le message (le prompt système,
-    # lui, reste celui du début).
-    context = prompts.conversation_context(conv)
+    # dernier échange, les éléments modifiés accompagnent le message (le prompt
+    # système, lui, reste celui du début).
+    context, blocks = prompts.conversation_context(conv)
     new_hash = prompts.context_hash(context)
     context_changed = new_hash != conv["context_hash"]
     prompt = text
     if context_changed and conv["session_id"] is not None:
-        prompt = prompts.context_update_message(context) + "\n\n---\n\nMessage :\n" + text
+        update = (prompts.context_diff_message(conv["context_blocks"], blocks) if conv["context_blocks"] is not None
+                  else prompts.context_update_message(context))  # conversation antérieure au suivi par blocs
+        prompt = update + "\n\n---\n\nMessage :\n" + text
     system = conv["system"]
     if conv["session_id"] is None:
         # Premier message : on part directement du contexte à jour.
@@ -274,11 +279,11 @@ async def send_message(conversation_id: int, body: MessageIn):
         db.add_message(conversation_id, "assistant", final["text"])
         if conv["session_id"] is None:
             db.set_system(conversation_id, system)
-        db.set_session(conversation_id, final["session_id"], new_hash)
+        db.set_session(conversation_id, final["session_id"], new_hash, blocks, final.get("tokens"))
         if conv["title"] == DEFAULT_TITLE:
             title = text if len(text) <= 60 else text[:57].rstrip() + "…"
             db.rename_conversation(conversation_id, title)
-        yield _sse({"type": "done", "truncated": final.get("stop_reason") == "max_tokens"})
+        yield _sse({"type": "done", "truncated": final.get("stop_reason") == "max_tokens", "tokens": final.get("tokens")})
 
     return StreamingResponse(events(), media_type="text/event-stream")
 

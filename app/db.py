@@ -1,6 +1,7 @@
 """Stockage SQLite : contextes (table `universes`, affichés « Contexte » dans l'interface),
 sections d'univers (lore), personnages, conversations et messages."""
 
+import json
 import os
 import re
 import sqlite3
@@ -21,7 +22,8 @@ CREATE TABLE IF NOT EXISTS lore (
     title       TEXT NOT NULL,
     content     TEXT NOT NULL DEFAULT '',
     secret      INTEGER NOT NULL DEFAULT 0,  -- 1 = réservé au MJ, jamais envoyé en mode joueur
-    position    INTEGER NOT NULL DEFAULT 0
+    position    INTEGER NOT NULL DEFAULT 0,
+    category    TEXT NOT NULL DEFAULT ''     -- groupe d'affichage (PNJ, Lieux…), '' = général
 );
 CREATE TABLE IF NOT EXISTS characters (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,7 +42,9 @@ CREATE TABLE IF NOT EXISTS conversations (
     system       TEXT NOT NULL,              -- figé à la création de la conversation
     context_hash TEXT NOT NULL,              -- empreinte du dernier contexte envoyé
     session_id   TEXT,                       -- session Claude Code reprise à chaque message
-    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    context_blocks TEXT,                     -- JSON : blocs du dernier contexte envoyé (pour n'envoyer que les changements)
+    last_tokens  INTEGER                     -- tokens lus par Claude au dernier message (taille de la conversation)
 );
 -- Mode MJ : personnages concernés par la conversation
 CREATE TABLE IF NOT EXISTS conversation_characters (
@@ -64,6 +68,7 @@ def init() -> None:
         db.executescript(SCHEMA)
         _migrate_modes(db)
         _migrate(db)
+        _add_columns(db)
         if not db.execute("SELECT 1 FROM universes").fetchone():
             db.execute("INSERT INTO universes (name) VALUES (?)", (DEFAULT_UNIVERSE,))
 
@@ -88,6 +93,17 @@ def _migrate_modes(db) -> None:
         "COMMIT;"
     )
     db.execute("PRAGMA foreign_keys = ON")
+
+
+def _add_columns(db) -> None:
+    """Colonnes ajoutées après coup (bases existantes)."""
+    for table, column, definition in (
+        ("lore", "category", "TEXT NOT NULL DEFAULT ''"),
+        ("conversations", "context_blocks", "TEXT"),
+        ("conversations", "last_tokens", "INTEGER"),
+    ):
+        if column not in {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def _migrate(db) -> None:
@@ -165,21 +181,22 @@ def delete_universe(universe_id: int) -> None:
 def list_lore(universe_id: int) -> list[dict]:
     with connect() as db:
         return rows(db.execute(
-            "SELECT * FROM lore WHERE universe_id = ? ORDER BY position, id", (universe_id,)
+            "SELECT * FROM lore WHERE universe_id = ? ORDER BY category COLLATE NOCASE, position, id", (universe_id,)
         ))
 
 
-def save_lore(lore_id: int | None, universe_id: int, title: str, content: str, secret: bool, position: int) -> int:
+def save_lore(lore_id: int | None, universe_id: int, title: str, content: str, secret: bool, position: int,
+              category: str) -> int:
     with connect() as db:
         if lore_id is None:
             cur = db.execute(
-                "INSERT INTO lore (universe_id, title, content, secret, position) VALUES (?, ?, ?, ?, ?)",
-                (universe_id, title, content, int(secret), position),
+                "INSERT INTO lore (universe_id, title, content, secret, position, category) VALUES (?, ?, ?, ?, ?, ?)",
+                (universe_id, title, content, int(secret), position, category),
             )
             return cur.lastrowid
         db.execute(
-            "UPDATE lore SET title = ?, content = ?, secret = ?, position = ? WHERE id = ?",
-            (title, content, int(secret), position, lore_id),
+            "UPDATE lore SET title = ?, content = ?, secret = ?, position = ?, category = ? WHERE id = ?",
+            (title, content, int(secret), position, category, lore_id),
         )
         return lore_id
 
@@ -241,6 +258,7 @@ def get_conversation(conversation_id: int) -> dict | None:
         if not row:
             return None
         conv = dict(row)
+        conv["context_blocks"] = json.loads(conv["context_blocks"]) if conv["context_blocks"] else None
         conv["character_ids"] = [r[0] for r in db.execute(
             "SELECT character_id FROM conversation_characters WHERE conversation_id = ? ORDER BY character_id",
             (conversation_id,),
@@ -284,11 +302,13 @@ def set_system(conversation_id: int, system: str) -> None:
         db.execute("UPDATE conversations SET system = ? WHERE id = ?", (system, conversation_id))
 
 
-def set_session(conversation_id: int, session_id: str, context_hash: str) -> None:
+def set_session(conversation_id: int, session_id: str, context_hash: str,
+                context_blocks: dict[str, str], last_tokens: int | None) -> None:
     with connect() as db:
         db.execute(
-            "UPDATE conversations SET session_id = ?, context_hash = ? WHERE id = ?",
-            (session_id, context_hash, conversation_id),
+            "UPDATE conversations SET session_id = ?, context_hash = ?, context_blocks = ?, "
+            "last_tokens = COALESCE(?, last_tokens) WHERE id = ?",
+            (session_id, context_hash, json.dumps(context_blocks, ensure_ascii=False), last_tokens, conversation_id),
         )
 
 

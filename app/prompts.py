@@ -29,8 +29,8 @@ N'invente pas de faits sur l'univers en les présentant comme établis : disting
 
 CREATION_INSTRUCTIONS = """\
 Tu aides le meneur de jeu (MJ) à préparer une campagne de jeu de rôle sur table \
-se déroulant dans l'univers maison décrit ci-dessous. Ce contexte (univers, règles, \
-personnages des joueurs, notes du MJ) fait autorité : ce que tu crées doit s'y \
+se déroulant dans l'univers maison décrit ci-dessous (règles, lieux, factions, PNJ, \
+intrigues, secrets du MJ). Ce contexte fait autorité : ce que tu crées doit s'y \
 intégrer sans le contredire.
 
 Ton rôle : rédiger, à la demande du MJ, des éléments prêts à être ajoutés à \
@@ -38,8 +38,9 @@ l'univers de la campagne — quêtes et scénarios, PNJ, lieux, factions, objets
 créatures, rumeurs, tables aléatoires…
 - Sois concret et jouable : noms, motivations, enjeux, indices, obstacles, \
   récompenses, statistiques si les règles fournies en prévoient.
-- Rattache tes créations à l'existant : lieux, factions et intrigues déjà établis, \
-  et surtout les historiques, objectifs et failles des personnages des joueurs.
+- Rattache tes créations à l'existant : lieux, factions, PNJ et intrigues déjà \
+  établis. Tu ne connais pas les personnages des joueurs : n'invente rien à leur \
+  sujet ; si le MJ en parle, appuie-toi sur ce qu'il en dit.
 - Si la demande est vague, fais des choix et assume-les plutôt que de poser des \
   questions ; le MJ demandera des modifications.
 - Quand le MJ demande une modification, renvoie l'élément complet mis à jour, \
@@ -74,14 +75,10 @@ Limites :
 Réponds en français, de façon claire et concise, sans préambule."""
 
 
-def _lore_section(universe_id: int, include_secret: bool) -> str:
-    parts = []
-    for entry in db.list_lore(universe_id):
-        if entry["secret"] and not include_secret:
-            continue
-        tag = " [SECRET — MJ uniquement]" if entry["secret"] else ""
-        parts.append(f'<section titre="{entry["title"]}{tag}">\n{entry["content"].strip()}\n</section>')
-    return "\n\n".join(parts) or "(aucun élément d'univers renseigné pour l'instant)"
+def _lore_block(entry: dict) -> str:
+    tag = " [SECRET — MJ uniquement]" if entry["secret"] else ""
+    group = f' groupe="{entry["category"]}"' if entry["category"] else ""
+    return f'<section titre="{entry["title"]}{tag}"{group}>\n{entry["content"].strip()}\n</section>'
 
 
 def _character_block(c: dict, with_gm_notes: bool) -> str:
@@ -92,46 +89,63 @@ def _character_block(c: dict, with_gm_notes: bool) -> str:
     return "\n".join(lines)
 
 
-def _names(characters: list[dict]) -> str:
-    return "\n".join(f'- {c["name"]} (joué par {c["player"] or "?"})' for c in characters)
+def _names(tag: str, characters: list[dict]) -> str:
+    names = "\n".join(f'- {c["name"]} (joué par {c["player"] or "?"})' for c in characters)
+    return f"<{tag}>\n{names}\n</{tag}>"
 
 
 def build_context(mode: str, universe_id: int, character_id: int | None = None,
-                  character_ids: list[int] | None = None) -> str:
-    """Contexte complet envoyé à Claude. Doit être déterministe (sert au hash).
+                  character_ids: list[int] | None = None) -> tuple[str, dict[str, str]]:
+    """Contexte envoyé à Claude : le texte complet (prompt système) et ses blocs
+    identifiés (`lore:<id>`, `pj:<id>`…), qui permettent de n'envoyer ensuite que
+    ce qui a changé. Doit être déterministe (sert au hash).
 
     Mode MJ : `character_ids` = personnages concernés (fiches complètes + notes MJ),
     les autres personnages de l'univers sont seulement nommés comme absents.
-    Mode création (Aide MJ) : même contexte que le MJ, avec tous les personnages.
+    Mode création (Aide MJ) : tout l'univers, secrets compris, sans les personnages joueurs.
     Mode joueur : `character_id` = fiche du joueur (sans notes MJ), univers public seulement."""
     universe = db.get_universe(universe_id)
     name = universe["name"] if universe else "?"
     characters = db.list_characters(universe_id)
+    lore = {
+        f"lore:{e['id']}": _lore_block(e)
+        for e in db.list_lore(universe_id)
+        if mode != "joueur" or not e["secret"]
+    }
+    lore_text = "\n\n".join(lore.values()) or "(aucun élément d'univers renseigné pour l'instant)"
+    blocks = dict(lore)
 
-    if mode in ("mj", "creation"):
-        selected = {c["id"] for c in characters} if mode == "creation" else set(character_ids or [])
-        involved = [c for c in characters if c["id"] in selected]
+    if mode == "creation":
+        return f'<univers contexte="{name}">\n{lore_text}\n</univers>', blocks
+
+    if mode == "mj":
+        selected = set(character_ids or [])
+        involved = {f"pj:{c['id']}": _character_block(c, with_gm_notes=True) for c in characters if c["id"] in selected}
         absent = [c for c in characters if c["id"] not in selected]
-        blocks = "\n\n".join(_character_block(c, with_gm_notes=True) for c in involved)
+        blocks.update(involved)
         context = (
-            f'<univers contexte="{name}">\n' + _lore_section(universe_id, include_secret=True) + "\n</univers>\n\n"
-            "<personnages_concernes>\n" + (blocks or "(aucun personnage sélectionné)") + "\n</personnages_concernes>"
+            f'<univers contexte="{name}">\n{lore_text}\n</univers>\n\n'
+            "<personnages_concernes>\n" + ("\n\n".join(involved.values()) or "(aucun personnage sélectionné)")
+            + "\n</personnages_concernes>"
         )
         if absent:
-            context += "\n\n<personnages_absents>\n" + _names(absent) + "\n</personnages_absents>"
-        return context
+            blocks["absents"] = _names("personnages_absents", absent)
+            context += "\n\n" + blocks["absents"]
+        return context, blocks
 
-    context = f'<univers_public contexte="{name}">\n' + _lore_section(universe_id, include_secret=False) + "\n</univers_public>"
+    context = f'<univers_public contexte="{name}">\n{lore_text}\n</univers_public>'
     others = [c for c in characters if c["id"] != character_id]
     if others:
-        context += "\n\n<autres_personnages_du_groupe>\n" + _names(others) + "\n</autres_personnages_du_groupe>"
+        blocks["autres"] = _names("autres_personnages_du_groupe", others)
+        context += "\n\n" + blocks["autres"]
     player_character = next((c for c in characters if c["id"] == character_id), None)
     if player_character:
-        context += "\n\n<fiche_du_joueur>\n" + _character_block(player_character, with_gm_notes=False) + "\n</fiche_du_joueur>"
-    return context
+        blocks["fiche"] = "<fiche_du_joueur>\n" + _character_block(player_character, with_gm_notes=False) + "\n</fiche_du_joueur>"
+        context += "\n\n" + blocks["fiche"]
+    return context, blocks
 
 
-def conversation_context(conv: dict) -> str:
+def conversation_context(conv: dict) -> tuple[str, dict[str, str]]:
     return build_context(conv["mode"], conv["universe_id"], conv["character_id"], conv["character_ids"])
 
 
@@ -143,9 +157,27 @@ def context_hash(context: str) -> str:
     return hashlib.sha256(context.encode("utf-8")).hexdigest()
 
 
+NOTE = "[Note automatique de l'application Snake Eyes] "
+
+
 def context_update_message(context: str) -> str:
     return (
-        "[Note automatique de l'application Snake Eyes] Le contexte de la campagne a été modifié "
-        "(univers, fiches ou personnages concernés). La version ci-dessous remplace entièrement "
-        "celle du prompt système et des mises à jour précédentes :\n\n" + context
+        NOTE + "Le contexte de la campagne a été modifié (univers, fiches ou personnages "
+        "concernés). La version ci-dessous remplace entièrement celle du prompt système et "
+        "des mises à jour précédentes :\n\n" + context
     )
+
+
+def context_diff_message(old: dict[str, str], new: dict[str, str]) -> str:
+    """Seulement les blocs ajoutés, modifiés ou retirés depuis le dernier envoi :
+    renvoyer tout le contexte à chaque retouche gonflerait la conversation."""
+    changed = [text for key, text in new.items() if old.get(key) != text]
+    removed = [text.split("\n", 1)[0] for key, text in old.items() if key not in new]
+    parts = [NOTE + "Le contexte de la campagne a été modifié depuis le dernier message. "
+             "Le reste du contexte est inchangé."]
+    if changed:
+        parts.append("Éléments ajoutés ou modifiés (chacun remplace entièrement sa version "
+                     "précédente) :\n\n" + "\n\n".join(changed))
+    if removed:
+        parts.append("Éléments retirés du contexte (n'en tiens plus compte) :\n" + "\n".join(f"- {r}" for r in removed))
+    return "\n\n".join(parts)

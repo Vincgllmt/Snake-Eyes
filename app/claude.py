@@ -18,9 +18,10 @@ from . import db
 os.environ.pop("ANTHROPIC_API_KEY", None)
 
 MODEL = os.getenv("SNAKE_EYES_MODEL") or None  # None = modèle par défaut de Claude Code
+# La réflexion pèse lourd dans la consommation (souvent plus que la réponse elle-même).
 EFFORT = {
-    "mj": os.getenv("SNAKE_EYES_EFFORT_MJ", "high"),
-    "creation": os.getenv("SNAKE_EYES_EFFORT_MJ", "high"),
+    "mj": os.getenv("SNAKE_EYES_EFFORT_MJ", "medium"),
+    "creation": os.getenv("SNAKE_EYES_EFFORT_CREATION", "medium"),
     "joueur": os.getenv("SNAKE_EYES_EFFORT_JOUEUR", "medium"),
 }
 # Dossier de travail des sessions, isolé du reste (pas de CLAUDE.md ni de réglages projet).
@@ -71,6 +72,10 @@ async def stream_reply(
             final["text"] = message.result if message.result is not None else text
             final["session_id"] = message.session_id
             final["stop_reason"] = message.stop_reason
+            usage = message.usage or {}
+            # Tokens relus pour ce message = taille de la conversation (contexte + historique).
+            final["tokens"] = sum(usage.get(k) or 0 for k in (
+                "input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")) or None
             return
 
     raise ClaudeError("Claude Code s'est arrêté sans renvoyer de réponse.")
